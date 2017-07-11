@@ -15,6 +15,3 @@ compiler = gcc
 gnu_dis_arch = ppc64
 
 sysdefs = -DLINUX -D_GNU_SOURCE -DPPC64
-
-CFLAGS += -DCOMPILER2 -DCOMPILER1
-

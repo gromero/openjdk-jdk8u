@@ -15,6 +15,3 @@ compiler = xlc
 gnu_dis_arch = ppc64
 
 sysdefs = -DAIX -DPPC64
-
-CFLAGS += -DCOMPILER2 -DCOMPILER1
-
