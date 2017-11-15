@@ -29,6 +29,8 @@
 #include "utilities/debug.hpp"
 #include "utilities/stack.inline.hpp"
 #include "utilities/taskqueue.hpp"
+#include "gc_implementation/parallelScavenge/psPromotionManager.inline.hpp"
+
 
 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
 
@@ -150,7 +152,7 @@ void ParallelTaskTerminator::sleep(uint millis) {
 }
 
 bool
-ParallelTaskTerminator::offer_termination(TerminatorTerminator* terminator) {
+ParallelTaskTerminator::offer_termination(TerminatorTerminator* terminator, PSPromotionManager *pm) {
   assert(_n_threads > 0, "Initialization is incorrect");
   assert(_offered_termination < _n_threads, "Invariant");
   Atomic::inc(&_offered_termination);
@@ -179,6 +181,20 @@ ParallelTaskTerminator::offer_termination(TerminatorTerminator* terminator) {
     assert(_offered_termination <= _n_threads, "Invariant");
     // Are all threads offering termination?
     if (_offered_termination == _n_threads) {
+      if (pm) {
+        for (;;) {
+          oop old_obj, new_obj;
+          bool isSuccess = pm->pop_objinfo(old_obj, new_obj);
+          if (isSuccess) {
+            HeapWord *_old = (HeapWord *)old_obj;
+            HeapWord *_new = (HeapWord *)new_obj;
+            size_t new_obj_size = old_obj->size();
+            Copy::aligned_disjoint_words(_old, _new, new_obj_size);
+          } else {
+            break;
+          }
+        }
+      }
       return true;
     } else {
       // Look for more work.
@@ -204,8 +220,25 @@ ParallelTaskTerminator::offer_termination(TerminatorTerminator* terminator) {
           // Increase the hard spinning period but only up to a limit.
           hard_spin_limit = MIN2(2*hard_spin_limit,
                                  (uint) WorkStealingHardSpins);
-          for (uint j = 0; j < hard_spin_limit; j++) {
-            SpinPause();
+          if (pm) {
+            for (uint j = 0; j < hard_spin_limit/5; j++) {
+              oop old_obj;
+              oop new_obj;
+              bool isSuccess = pm->pop_objinfo(old_obj, new_obj);
+              if (isSuccess) {
+                HeapWord *_old = (HeapWord *)old_obj;
+                HeapWord *_new = (HeapWord *)new_obj;
+                size_t new_obj_size = old_obj->size();
+                Copy::aligned_disjoint_words(_old, _new, new_obj_size);
+              } else { 
+                break;
+              }
+            }
+          }
+          else {
+            for (uint j = 0; j < hard_spin_limit; j++) {
+              SpinPause();
+            }
           }
           hard_spin_count++;
 #ifdef TRACESPINNING
@@ -223,7 +256,29 @@ ParallelTaskTerminator::offer_termination(TerminatorTerminator* terminator) {
         // runqueue, if it has nothing else to run (as opposed to the yield
         // which may only move the thread to the end of the this processor's
         // runqueue).
+#if 0
+        if (pm) {
+          for (uint j = 0; j < hard_spin_limit/5; j++) {
+            oop old_obj;
+            oop new_obj;
+            bool isSuccess = pm->pop_objinfo(old_obj, new_obj);
+            if (isSuccess) {
+              HeapWord *_old = (HeapWord *)old_obj;
+              HeapWord *_new = (HeapWord *)new_obj;
+              size_t new_obj_size = old_obj->size();
+              Copy::aligned_disjoint_words(_old, _new, new_obj_size);
+            } else { 
+              break;
+            }
+          }
+        }
+        else {
+          sleep(WorkStealingSleepMillis);
+        }
+#else
+//printf("sleep\n");
         sleep(WorkStealingSleepMillis);
+#endif
       }
 
 #ifdef TRACESPINNING

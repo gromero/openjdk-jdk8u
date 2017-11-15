@@ -425,6 +425,11 @@ void InstanceRefKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
   }
 }
 
+int InstanceRefKlass::oop_num_references(oop obj) {
+  // MH-20170430 No care here, so just return non-zero value.
+  return 100; 
+}
+
 template <class T>
 void specialized_oop_update_pointers(InstanceRefKlass *ref,
                                     ParCompactionManager* cm, oop obj) {

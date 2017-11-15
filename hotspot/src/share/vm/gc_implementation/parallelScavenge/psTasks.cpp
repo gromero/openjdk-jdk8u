@@ -156,10 +156,10 @@ void StealTask::do_it(GCTaskManager* manager, uint which) {
     StarTask p;
     if (PSPromotionManager::steal_depth(which, &random_seed, p)) {
       TASKQUEUE_STATS_ONLY(pm->record_steal(p));
-      pm->process_popped_location_depth(p);
-      pm->drain_stacks_depth(true);
+      pm->process_popped_location_depth(p, terminator());
+      pm->drain_stacks_depth(true, terminator());
     } else {
-      if (terminator()->offer_termination()) {
+      if (terminator()->offer_termination(pm)) {
         break;
       }
     }

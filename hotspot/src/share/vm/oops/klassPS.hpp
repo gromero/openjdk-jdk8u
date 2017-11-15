@@ -32,6 +32,7 @@
 #if INCLUDE_ALL_GCS
 #define PARALLEL_GC_DECLS \
   virtual void oop_push_contents(PSPromotionManager* pm, oop obj);          \
+  virtual int oop_num_references(oop obj);                                  \
   /* Parallel Old GC support                                                \
                                                                             \
    The 2-arg version of oop_update_pointers is for objects that are         \
@@ -44,6 +45,7 @@
 // Pure virtual version for klass.hpp
 #define PARALLEL_GC_DECLS_PV \
   virtual void oop_push_contents(PSPromotionManager* pm, oop obj) = 0;      \
+  virtual int oop_num_references(oop obj) = 0;                              \
   virtual void oop_follow_contents(ParCompactionManager* cm, oop obj) = 0;  \
   virtual int  oop_update_pointers(ParCompactionManager* cm, oop obj) = 0;
 #else  // INCLUDE_ALL_GCS

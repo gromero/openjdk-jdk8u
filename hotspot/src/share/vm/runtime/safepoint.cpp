@@ -228,6 +228,8 @@ void SafepointSynchronize::begin() {
     for (JavaThread *cur = Threads::first(); cur != NULL; cur = cur->next()) {
       assert(!cur->is_ConcurrentGC_thread(), "A concurrent GC thread is unexpectly being suspended");
       ThreadSafepointState *cur_state = cur->safepoint_state();
+// MH-20170624
+//cur_state->print();
       if (cur_state->is_running()) {
         cur_state->examine_state_of_thread();
         if (!cur_state->is_running()) {

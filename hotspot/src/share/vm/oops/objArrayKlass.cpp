@@ -579,6 +579,12 @@ void ObjArrayKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
     })
 }
 
+int ObjArrayKlass::oop_num_references(oop obj) {
+//  return objArrayOop(obj)->length();
+//  printf("name=%s\n", internal_name());
+  return 100;
+}
+
 int ObjArrayKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
   assert (obj->is_objArray(), "obj must be obj array");
   objArrayOop a = objArrayOop(obj);

@@ -37,6 +37,21 @@ inline PSPromotionManager* PSPromotionManager::manager_array(int index) {
   return &_manager_array[index];
 }
 
+inline void PSPromotionManager::push_objinfo(oop old_obj, oop new_obj) {
+  _objinfo_old_set->push(old_obj);
+  _objinfo_new_set->push(new_obj);
+}
+
+inline bool PSPromotionManager::pop_objinfo(oop &old_obj, oop &new_obj) {
+  if (_objinfo_old_set->is_empty())
+    return false;
+
+  old_obj = _objinfo_old_set->pop();
+  new_obj = _objinfo_new_set->pop();
+
+  return true;
+}
+
 template <class T>
 inline void PSPromotionManager::claim_or_forward_internal_depth(T* p) {
   if (p != NULL) { // XXX: error if p != NULL here
@@ -62,6 +77,102 @@ inline void PSPromotionManager::claim_or_forward_depth(T* p) {
   assert(Universe::heap()->is_in(p), "pointer outside heap");
 
   claim_or_forward_internal_depth(p);
+}
+
+template<bool promote_immediately>
+oop PSPromotionManager::lazyCopy_to_survivor_space(oop o, ParallelTaskTerminator *terminator) {
+  oop new_obj = NULL;
+
+  // NOTE! We must be very careful with any methods that access the mark
+  // in o. There may be multiple threads racing on it, and it may be forwarded
+  // at any time. Do not use oop methods for accessing the mark!
+  markOop test_mark = o->mark();
+
+  // The same test as "o->is_forwarded()"
+  if (!test_mark->is_marked()) {
+    bool new_obj_is_tenured = false;
+    size_t new_obj_size = o->size();
+
+    if (!promote_immediately) {
+      // Find the objects age, MT safe.
+      uint age = (test_mark->has_displaced_mark_helper() /* o->has_displaced_mark() */) ?
+        test_mark->displaced_mark_helper()->age() : test_mark->age();
+      // Try allocating obj in to-space (unless too old)
+      if (age < PSScavenge::tenuring_threshold()) {
+        new_obj = (oop) _young_lab.allocate(new_obj_size);
+        if (new_obj == NULL && !_young_gen_is_full) {
+          // Do we allocate directly, or flush and refill?
+          if (new_obj_size > (YoungPLABSize / 2)) {
+            // Allocate this object directly
+            new_obj = (oop)young_space()->cas_allocate(new_obj_size);
+          } else {
+            // Flush and fill
+            _young_lab.flush();
+
+            HeapWord* lab_base = young_space()->cas_allocate(YoungPLABSize);
+            if (lab_base != NULL) {
+              _young_lab.initialize(MemRegion(lab_base, YoungPLABSize));
+              // Try the young lab allocation again.
+              new_obj = (oop) _young_lab.allocate(new_obj_size);
+            } else {
+              _young_gen_is_full = true;
+            }
+          }
+        }
+     }
+    }
+
+    // Otherwise try allocating obj tenured
+    if (new_obj == NULL) {
+#ifndef PRODUCT
+      if (Universe::heap()->promotion_should_fail()) {
+        return oop_promotion_failed(o, test_mark);
+      }
+#endif  // #ifndef PRODUCT
+
+      new_obj = (oop) _old_lab.allocate(new_obj_size);
+      new_obj_is_tenured = true;
+
+      if (new_obj == NULL) {
+        if (!_old_gen_is_full) {
+          // Do we allocate directly, or flush and refill?
+          if (new_obj_size > (OldPLABSize / 2)) {
+            // Allocate this object directly
+            new_obj = (oop)old_gen()->cas_allocate(new_obj_size);
+          } else {
+            // Flush and fill
+            _old_lab.flush();
+
+            HeapWord* lab_base = old_gen()->cas_allocate(OldPLABSize);
+            if(lab_base != NULL) {
+#ifdef ASSERT
+              // Delay the initialization of the promotion lab (plab).
+              // This exposes uninitialized plabs to card table processing.
+              if (GCWorkerDelayMillis > 0) {
+                os::sleep(Thread::current(), GCWorkerDelayMillis, false);
+              }
+#endif
+              _old_lab.initialize(MemRegion(lab_base, OldPLABSize));
+              // Try the old lab allocation again.
+              new_obj = (oop) _old_lab.allocate(new_obj_size);
+            }
+          }
+        }
+
+        // This is the promotion failed test, and code handling.
+        // The code belongs here for two reasons. It is slightly
+        // different than the code below, and cannot share the
+        // CAS testing code. Keeping the code here also minimizes
+        // the impact on the common case fast path code.
+
+        if (new_obj == NULL) {
+          _old_gen_is_full = true;
+          return oop_promotion_failed(o, test_mark);
+        }
+      }
+    }
+  }
+  return new_obj;
 }
 
 //
@@ -169,7 +280,6 @@ oop PSPromotionManager::copy_to_survivor_space(oop o) {
 
     // Copy obj
     Copy::aligned_disjoint_words((HeapWord*)o, (HeapWord*)new_obj, new_obj_size);
-
     // Now we have to CAS in the header.
     if (o->cas_forward_to(new_obj, test_mark)) {
       // We won any races, we "own" this object.
@@ -235,7 +345,7 @@ oop PSPromotionManager::copy_to_survivor_space(oop o) {
 }
 
 
-inline void PSPromotionManager::process_popped_location_depth(StarTask p) {
+inline void PSPromotionManager::process_popped_location_depth(StarTask p, ParallelTaskTerminator *terminator) {
   if (is_oop_masked(p)) {
     assert(PSChunkLargeArrays, "invariant");
     oop const old = unmask_chunked_array_oop(p);

@@ -2377,6 +2377,15 @@ void InstanceKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
     assert_nothing )
 }
 
+int InstanceKlass::oop_num_references(oop obj) {
+/*
+  OopMapBlock* const start_map = start_of_nonstatic_oop_maps();
+  OopMapBlock* map             = start_map + nonstatic_oop_map_count();
+  return map->count();
+*/
+  return 100;
+}
+
 int InstanceKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
   int size = size_helper();
   InstanceKlass_OOP_MAP_ITERATE( \

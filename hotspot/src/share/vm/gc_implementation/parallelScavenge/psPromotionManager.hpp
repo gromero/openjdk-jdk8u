@@ -61,6 +61,9 @@ class PSPromotionManager VALUE_OBJ_CLASS_SPEC {
   static OopStarTaskQueueSet*           _stack_array_depth;
   static PSOldGen*                      _old_gen;
   static MutableSpace*                  _young_space;
+  int _objinfo_index;
+  Stack<oop, mtInternal>* _objinfo_old_set;
+  Stack<oop, mtInternal>* _objinfo_new_set;
 
 #if TASKQUEUE_STATS
   size_t                              _masked_pushes;
@@ -148,11 +151,15 @@ class PSPromotionManager VALUE_OBJ_CLASS_SPEC {
     claimed_stack_depth()->push(p);
   }
 
+  void add_object_info(oop old_obj, oop new_obj, size_t size);
+
  protected:
   static OopStarTaskQueueSet* stack_array_depth()   { return _stack_array_depth; }
  public:
   // Static
   static void initialize();
+  inline void push_objinfo(oop old_obj, oop new_obj);
+  inline bool pop_objinfo(oop &old_obj, oop &new_obj);
 
   static void pre_scavenge();
   static bool post_scavenge(YoungGCTracer& gc_tracer);
@@ -163,7 +170,7 @@ class PSPromotionManager VALUE_OBJ_CLASS_SPEC {
   static bool steal_depth(int queue_num, int* seed, StarTask& t) {
     return stack_array_depth()->steal(queue_num, seed, t);
   }
-
+ 
   PSPromotionManager();
 
   // Accessors
@@ -177,6 +184,7 @@ class PSPromotionManager VALUE_OBJ_CLASS_SPEC {
   void set_old_gen_is_full(bool state) { _old_gen_is_full = state; }
 
   // Promotion methods
+  template<bool promote_immediately> oop lazyCopy_to_survivor_space(oop o, ParallelTaskTerminator *terminator = NULL);
   template<bool promote_immediately> oop copy_to_survivor_space(oop o);
   oop oop_promotion_failed(oop obj, markOop obj_mark);
 
@@ -192,13 +200,13 @@ class PSPromotionManager VALUE_OBJ_CLASS_SPEC {
       drain_stacks_depth(false);
     }
   }
-  void drain_stacks_depth(bool totally_drain);
+  void drain_stacks_depth(bool totally_drain, ParallelTaskTerminator *terminator = NULL);
 
   bool stacks_empty() {
     return claimed_stack_depth()->is_empty();
   }
 
-  inline void process_popped_location_depth(StarTask p);
+  inline void process_popped_location_depth(StarTask p, ParallelTaskTerminator *terminator = NULL);
 
   template <class T> inline void claim_or_forward_depth(T* p);
 
