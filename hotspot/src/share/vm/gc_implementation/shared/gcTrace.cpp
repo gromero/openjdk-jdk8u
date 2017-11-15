@@ -61,6 +61,10 @@ bool GCTracer::has_reported_gc_start() const {
   return !_shared_gc_info.gc_id().is_undefined();
 }
 
+void GCTracer::set_pauseTime(double duration_in_seconds) {
+  _shared_gc_info._pauseTime_history[_shared_gc_info.get_history_index()] = duration_in_seconds;
+}
+
 void GCTracer::report_gc_end_impl(const Ticks& timestamp, TimePartitions* time_partitions) {
   assert_set_gc_id();
 
@@ -196,6 +200,53 @@ void OldGCTracer::report_concurrent_mode_failure() {
   assert_set_gc_id();
 
   send_concurrent_mode_failure_event();
+}
+
+bool OldGCTracer::should_attempt_scavenge() {
+  GCCause::Cause *_cause_history = _shared_gc_info._cause_history;
+  double *_pauseTime_history = _shared_gc_info._pauseTime_history;
+  size_t *_reduction_history = _shared_gc_info._reduction_history;
+
+  for (int i = _shared_gc_info.get_history_index(); i < HISTORY_COUNT; i = ++i & HISTORY_COUNT) {
+    if (  _cause_history[i] != GCCause::_adaptive_size_policy
+       || _pauseTime_history[i] < ACCEPTABLE_PAUSE_TIME
+       || _reduction_history[i] > ACCEPTABLE_REDUCTION_SIZE) {
+      return false;
+    }
+  }
+  _shared_gc_info.remove_history();
+
+  return true;
+}
+
+bool OldGCTracer::is_rusty(TRAPS) {
+  GCCause::Cause *_cause_history = _shared_gc_info._cause_history;
+  double *_pauseTime_history = _shared_gc_info._pauseTime_history;
+  size_t *_reduction_history = _shared_gc_info._reduction_history;
+
+  for (int i = _shared_gc_info.get_history_index(); i < HISTORY_COUNT; i = ++i & HISTORY_COUNT) {
+    if (  _cause_history[i] != GCCause::_adaptive_size_policy
+       || _pauseTime_history[i] < ACCEPTABLE_PAUSE_TIME
+       || _reduction_history[i] > ACCEPTABLE_REDUCTION_SIZE) {
+      return false;
+    }
+  }
+
+  _shared_gc_info.remove_history();
+
+/*
+  if (++_shared_gc_info._skip_count > COUNT_TO_OOME) {
+    _shared_gc_info._skip_count = 0;
+    THROW_MSG_(vmSymbols::java_lang_OutOfMemoryError(), "Full GC exceeds acceptable upper limit of pause time and lower limit of reduction size continusouly.", true);
+  }
+*/
+
+  return true;
+}
+
+void OldGCTracer::set_reduction(size_t reduced) {
+  uint i = _shared_gc_info.get_history_index();
+  _shared_gc_info._reduction_history[i] = reduced;
 }
 
 #if INCLUDE_ALL_GCS

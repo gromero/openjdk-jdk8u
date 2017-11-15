@@ -37,9 +37,10 @@ class GCTraceTime {
   bool _print_cr;
   GCTimer* _timer;
   Ticks _start_counter;
+  GCTracer *_gc_tracer;
 
  public:
-  GCTraceTime(const char* title, bool doit, bool print_cr, GCTimer* timer, GCId gc_id);
+  GCTraceTime(const char* title, bool doit, bool print_cr, GCTimer* timer, GCId gc_id, GCTracer *gc_tracer=NULL);
   ~GCTraceTime();
 };
 

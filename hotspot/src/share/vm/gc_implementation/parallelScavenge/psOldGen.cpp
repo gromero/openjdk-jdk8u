@@ -222,9 +222,9 @@ HeapWord* PSOldGen::expand_and_cas_allocate(size_t word_size) {
   return cas_allocate_noexpand(word_size);
 }
 
-void PSOldGen::expand(size_t bytes) {
+bool PSOldGen::expand(size_t bytes) {
   if (bytes == 0) {
-    return;
+    return false;
   }
   MutexLocker x(ExpandHeap_lock);
   const size_t alignment = virtual_space()->alignment();
@@ -262,6 +262,7 @@ void PSOldGen::expand(size_t bytes) {
       gclog_or_tty->print_cr("Garbage collection disabled, expanded heap instead");
     }
   }
+  return success;
 }
 
 bool PSOldGen::expand_by(size_t bytes) {
@@ -338,7 +339,7 @@ void PSOldGen::shrink(size_t bytes) {
   }
 }
 
-void PSOldGen::resize(size_t desired_free_space) {
+bool PSOldGen::resize(size_t desired_free_space) {
   const size_t alignment = virtual_space()->alignment();
   const size_t size_before = virtual_space()->committed_size();
   size_t new_size = used_in_bytes() + desired_free_space;
@@ -365,16 +366,17 @@ void PSOldGen::resize(size_t desired_free_space) {
 
   if (new_size == current_size) {
     // No change requested
-    return;
+    return false;
   }
   if (new_size > current_size) {
     size_t change_bytes = new_size - current_size;
-    expand(change_bytes);
+    return expand(change_bytes);
   } else {
     size_t change_bytes = current_size - new_size;
     // shrink doesn't grab this lock, expand does. Is that right?
     MutexLocker x(ExpandHeap_lock);
     shrink(change_bytes);
+    return false;
   }
 
   if (PrintAdaptiveSizePolicy) {
@@ -386,6 +388,7 @@ void PSOldGen::resize(size_t desired_free_space) {
                   heap->total_collections(),
                   size_before, virtual_space()->committed_size());
   }
+  return false;
 }
 
 // NOTE! We need to be careful about resizing. During a GC, multiple

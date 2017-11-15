@@ -46,6 +46,8 @@ int CollectedHeap::_fire_out_of_memory_count = 0;
 
 size_t CollectedHeap::_filler_array_max_size = 0;
 
+bool CollectedHeap::_need_OutOfMemoryError = false;
+
 template <>
 void EventLogBase<GCMessage>::print(outputStream* st, GCMessage& m) {
   st->print_cr("GC heap %s", m.is_before ? "before" : "after");

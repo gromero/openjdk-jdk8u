@@ -35,8 +35,8 @@
 #include "utilities/ticks.inline.hpp"
 
 
-GCTraceTime::GCTraceTime(const char* title, bool doit, bool print_cr, GCTimer* timer, GCId gc_id) :
-    _title(title), _doit(doit), _print_cr(print_cr), _timer(timer), _start_counter() {
+GCTraceTime::GCTraceTime(const char* title, bool doit, bool print_cr, GCTimer* timer, GCId gc_id, GCTracer *gc_tracer) :
+    _title(title), _doit(doit), _print_cr(print_cr), _timer(timer), _start_counter(), _gc_tracer(gc_tracer) {
   if (_doit || _timer != NULL) {
     _start_counter.stamp();
   }
@@ -68,6 +68,12 @@ GCTraceTime::~GCTraceTime() {
 
   if (_timer != NULL) {
     _timer->register_gc_phase_end(stop_counter);
+  }
+
+  if (_gc_tracer != NULL) {
+    const Tickspan duration = stop_counter - _start_counter;
+    double duration_in_seconds = TicksToTimeHelper::seconds(duration);
+    _gc_tracer->set_pauseTime(duration_in_seconds);
   }
 
   if (_doit) {

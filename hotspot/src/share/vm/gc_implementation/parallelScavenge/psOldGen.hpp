@@ -90,7 +90,7 @@ class PSOldGen : public CHeapObj<mtGC> {
 
   HeapWord* expand_and_allocate(size_t word_size);
   HeapWord* expand_and_cas_allocate(size_t word_size);
-  void expand(size_t bytes);
+  bool expand(size_t bytes);
   bool expand_by(size_t bytes);
   bool expand_to_reserved();
 
@@ -160,7 +160,7 @@ class PSOldGen : public CHeapObj<mtGC> {
   }
 
   // Calculating new sizes
-  void resize(size_t desired_free_space);
+  bool resize(size_t desired_free_space);
 
   // Allocation. We report all successful allocations to the size policy
   // Note that the perm gen does not use this method, and should not!
