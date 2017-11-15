@@ -87,6 +87,8 @@ class ParallelScavengeHeap : public CollectedHeap {
     return CollectedHeap::ParallelScavengeHeap;
   }
 
+  void setOutOfMemoryError();
+
   virtual CollectorPolicy* collector_policy() const { return (CollectorPolicy*) _collector_policy; }
 
   static PSYoungGen* young_gen() { return _young_gen; }
@@ -233,7 +235,7 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   // Resize the old generation.  The reserved space for the
   // generation may be expanded in preparation for the resize.
-  void resize_old_gen(size_t desired_free_space);
+  bool resize_old_gen(size_t desired_free_space);
 
   // Save the tops of the spaces in all generations
   void record_gen_tops_before_GC() PRODUCT_RETURN;

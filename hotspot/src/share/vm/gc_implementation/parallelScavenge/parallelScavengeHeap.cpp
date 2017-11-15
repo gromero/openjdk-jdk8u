@@ -59,6 +59,8 @@ jint ParallelScavengeHeap::initialize() {
   _collector_policy = new GenerationSizer();
   _collector_policy->initialize_all();
 
+  _need_OutOfMemoryError = false;
+
   const size_t heap_size = _collector_policy->max_heap_byte_size();
 
   ReservedSpace heap_rs = Universe::reserve_heap(heap_size, _collector_policy->heap_alignment());
@@ -698,17 +700,17 @@ void ParallelScavengeHeap::resize_young_gen(size_t eden_size,
 // Before delegating the resize to the old generation,
 // the reserved space for the young and old generations
 // may be changed to accomodate the desired resize.
-void ParallelScavengeHeap::resize_old_gen(size_t desired_free_space) {
+bool ParallelScavengeHeap::resize_old_gen(size_t desired_free_space) {
   if (UseAdaptiveGCBoundary) {
     if (size_policy()->bytes_absorbed_from_eden() != 0) {
       size_policy()->reset_bytes_absorbed_from_eden();
-      return;  // The generation changed size already.
+      return false;  // The generation changed size already.
     }
     gens()->adjust_boundary_for_old_gen_needs(desired_free_space);
   }
 
   // Delegate the resize to the generation.
-  _old_gen->resize(desired_free_space);
+  return _old_gen->resize(desired_free_space);
 }
 
 ParallelScavengeHeap::ParStrongRootsScope::ParStrongRootsScope() {
@@ -736,3 +738,7 @@ void ParallelScavengeHeap::gen_mangle_unused_area() {
   }
 }
 #endif
+
+void ParallelScavengeHeap::setOutOfMemoryError() {
+  _need_OutOfMemoryError = true;
+}

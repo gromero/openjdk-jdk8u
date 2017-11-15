@@ -112,6 +112,13 @@ void CollectedHeap::post_allocation_setup_array(KlassHandle klass,
 
 HeapWord* CollectedHeap::common_mem_allocate_noinit(KlassHandle klass, size_t size, TRAPS) {
 
+/*
+  if (_need_OutOfMemoryError) {
+    _need_OutOfMemoryError = false;
+    THROW_MSG_(vmSymbols::java_lang_OutOfMemoryError(), "Full GC exceeds acceptable upper limit of pause time and lower limit of reduction size continusouly.", NULL);
+  }
+*/
+
   // Clear unhandled oops for memory allocation.  Memory allocation might
   // not take out a lock if from tlab, so clear here.
   CHECK_UNHANDLED_OOPS_ONLY(THREAD->clear_unhandled_oops();)

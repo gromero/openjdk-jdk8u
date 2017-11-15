@@ -230,7 +230,7 @@ bool PSScavenge::invoke() {
   IsGCActiveMark mark;
 
   const bool scavenge_done = PSScavenge::invoke_no_policy();
-  const bool need_full_gc = !scavenge_done ||
+  bool need_full_gc = !scavenge_done ||
     policy->should_full_GC(heap->old_gen()->free_in_bytes());
   bool full_gc_done = false;
 
@@ -238,6 +238,38 @@ bool PSScavenge::invoke() {
     PSGCAdaptivePolicyCounters* const counters = heap->gc_policy_counters();
     const int ffs_val = need_full_gc ? full_follows_scavenge : not_skipped;
     counters->update_full_follows_scavenge(ffs_val);
+  }
+
+  if (need_full_gc) {
+    ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
+    PSAdaptiveSizePolicy* size_policy = heap->size_policy();
+
+    if (UseAdaptiveSizePolicy) {
+      if (UseAdaptiveGenerationSizePolicyAtMajorCollection) {
+        if (heap->resize_old_gen(size_policy->calculated_old_free_size_in_bytes())) {
+          need_full_gc = false; 
+        }
+      }
+    }
+  }
+
+  if (need_full_gc) {
+    ParallelOldTracer* old_gc_tracer = PSParallelCompact::gc_tracer();
+    Thread *THREAD = Thread::current();
+    bool isSkipped = old_gc_tracer->is_rusty(THREAD);
+/*
+    if (HAS_PENDING_EXCEPTION) {
+      CLEAR_PENDING_EXCEPTION;
+      JvmtiExport::post_resource_exhausted(JVMTI_RESOURCE_EXHAUSTED_OOM_ERROR, 
+        "Full GC exceeds acceptable upper limit of pause time and lower limit of reduction size continusouly.");
+      heap->setOutOfMemoryError();
+      GCTraceTime t1("Requested throwing OutOfMemoryError", true, true, NULL, _gc_tracer.gc_id());
+      return false;
+    }
+*/
+    if (isSkipped) {
+      full_gc_done = false; 
+    }
   }
 
   if (need_full_gc) {
@@ -793,6 +825,21 @@ bool PSScavenge::should_attempt_scavenge() {
   size_t promotion_estimate = MIN2(avg_promoted, young_gen->used_in_bytes());
   bool result = promotion_estimate < old_gen->free_in_bytes();
 
+  if (result) {
+    _consecutive_skipped_scavenges = 0;
+  } else {
+    ParallelOldTracer* old_gc_tracer = PSParallelCompact::gc_tracer();
+    if (old_gc_tracer->should_attempt_scavenge()) {
+      _consecutive_skipped_scavenges = 0;
+      result = true;
+    } else {
+      _consecutive_skipped_scavenges++;
+      if (UsePerfData) {
+        counters->update_scavenge_skipped(promoted_too_large);
+      }
+    }
+  }
+
   if (PrintGCDetails && Verbose) {
     gclog_or_tty->print(result ? "  do scavenge: " : "  skip scavenge: ");
     gclog_or_tty->print_cr(" average_promoted " SIZE_FORMAT
@@ -808,14 +855,6 @@ bool PSScavenge::should_attempt_scavenge() {
     }
   }
 
-  if (result) {
-    _consecutive_skipped_scavenges = 0;
-  } else {
-    _consecutive_skipped_scavenges++;
-    if (UsePerfData) {
-      counters->update_scavenge_skipped(promoted_too_large);
-    }
-  }
   return result;
 }
 

@@ -2055,7 +2055,7 @@ bool PSParallelCompact::invoke_no_policy(bool maximum_heap_compaction) {
     heap->set_par_threads(gc_task_manager()->active_workers());
 
     TraceCPUTime tcpu(PrintGCDetails, true, gclog_or_tty);
-    GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer.gc_id());
+    GCTraceTime t1(GCCauseString("Full GC", gc_cause), PrintGC, !PrintGCDetails, NULL, _gc_tracer.gc_id(), &_gc_tracer);
     TraceCollectorStats tcs(counters());
     TraceMemoryManagerStats tms(true /* Full GC */,gc_cause);
 
@@ -2180,6 +2180,8 @@ bool PSParallelCompact::invoke_no_policy(bool maximum_heap_compaction) {
     MetaspaceGC::compute_new_size();
 
     if (TraceGen1Time) accumulated_time()->stop();
+
+    _gc_tracer.set_reduction(pre_gc_values.old_gen_used() - old_gen->used_in_bytes());
 
     if (PrintGC) {
       if (PrintGCDetails) {

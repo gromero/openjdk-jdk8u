@@ -49,6 +49,11 @@ class ReferenceProcessorStats;
 class TimePartitions;
 class BoolObjectClosure;
 
+#define HISTORY_COUNT 3
+#define ACCEPTABLE_PAUSE_TIME 4
+#define ACCEPTABLE_REDUCTION_SIZE 2*M
+#define COUNT_TO_OOME 100
+
 class SharedGCInfo VALUE_OBJ_CLASS_SPEC {
  private:
   GCId _gc_id;
@@ -64,16 +69,41 @@ class SharedGCInfo VALUE_OBJ_CLASS_SPEC {
     _gc_id(GCId::undefined()),
     _name(name),
     _cause(GCCause::_last_gc_cause),
+    _index_history_count(0),
+    _skip_count(0),
+    _is_skipped(false),
     _start_timestamp(),
     _end_timestamp(),
     _sum_of_pauses(),
     _longest_pause() {
   }
+  uint      _index_history_count;
+  uint      _skip_count;
+  GCCause::Cause _cause_history[HISTORY_COUNT];
+  size_t    _reduction_history[HISTORY_COUNT];
+  double    _pauseTime_history[HISTORY_COUNT];
+  bool      _is_skipped;
 
   void set_gc_id(GCId gc_id) { _gc_id = gc_id; }
   const GCId& gc_id() const { return _gc_id; }
 
-  void set_start_timestamp(const Ticks& timestamp) { _start_timestamp = timestamp; }
+  void remove_history() {
+    _cause_history[get_history_index()] = GCCause::_no_gc;
+  }
+
+  int increment_history_index() {
+    _index_history_count =  ++_index_history_count & HISTORY_COUNT;
+    return _index_history_count;
+  }
+
+  int get_history_index() {
+    return _index_history_count;
+  }
+
+  void set_start_timestamp(const Ticks& timestamp) { 
+    _start_timestamp = timestamp; 
+    increment_history_index();
+  }
   const Ticks start_timestamp() const { return _start_timestamp; }
 
   void set_end_timestamp(const Ticks& timestamp) { _end_timestamp = timestamp; }
@@ -82,7 +112,10 @@ class SharedGCInfo VALUE_OBJ_CLASS_SPEC {
   void set_name(GCName name) { _name = name; }
   GCName name() const { return _name; }
 
-  void set_cause(GCCause::Cause cause) { _cause = cause; }
+  void set_cause(GCCause::Cause cause) {
+    _cause = cause;
+    _cause_history[get_history_index()] = cause;
+  }
   GCCause::Cause cause() const { return _cause; }
 
   void set_sum_of_pauses(const Tickspan& duration) { _sum_of_pauses = duration; }
@@ -121,6 +154,7 @@ class GCTracer : public ResourceObj {
   SharedGCInfo _shared_gc_info;
 
  public:
+  GCTracer(GCName name) : _shared_gc_info(name) {}
   void report_gc_start(GCCause::Cause cause, const Ticks& timestamp);
   void report_gc_end(const Ticks& timestamp, TimePartitions* time_partitions);
   void report_gc_heap_summary(GCWhen::Type when, const GCHeapSummary& heap_summary) const;
@@ -129,9 +163,9 @@ class GCTracer : public ResourceObj {
   void report_object_count_after_gc(BoolObjectClosure* object_filter) NOT_SERVICES_RETURN;
   bool has_reported_gc_start() const;
   const GCId& gc_id() { return _shared_gc_info.gc_id(); }
+  void set_pauseTime(double duration_in_seconds);
 
  protected:
-  GCTracer(GCName name) : _shared_gc_info(name) {}
   void report_gc_start_impl(GCCause::Cause cause, const Ticks& timestamp);
   virtual void report_gc_end_impl(const Ticks& timestamp, TimePartitions* time_partitions);
 
@@ -169,6 +203,9 @@ class OldGCTracer : public GCTracer {
 
  public:
   void report_concurrent_mode_failure();
+  bool should_attempt_scavenge();
+  bool is_rusty(TRAPS);
+  void set_reduction(size_t reduced);
 
  private:
   void send_old_gc_event() const;

@@ -191,6 +191,8 @@ class CollectedHeap : public CHeapObj<mtInternal> {
     G1CollectedHeap
   };
 
+  static bool _need_OutOfMemoryError;
+
   static inline size_t filler_array_max_size() {
     return _filler_array_max_size;
   }
