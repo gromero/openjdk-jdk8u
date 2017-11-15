@@ -248,6 +248,12 @@ void TypeArrayKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
   assert(obj->is_typeArray(),"must be a type array");
 }
 
+int TypeArrayKlass::oop_num_references(oop obj) {
+  // MH-20170420 Need to make sure if 0 is ok
+//  return 100;
+  return 0;
+}
+
 int
 TypeArrayKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
   assert(obj->is_typeArray(),"must be a type array");

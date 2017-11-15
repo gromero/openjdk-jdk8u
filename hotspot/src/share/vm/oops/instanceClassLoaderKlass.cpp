@@ -143,6 +143,11 @@ void InstanceClassLoaderKlass::oop_push_contents(PSPromotionManager* pm, oop obj
   // class loader data link.
 }
 
+int InstanceClassLoaderKlass::oop_num_references(oop obj) {
+//  return InstanceKlass::oop_num_references(obj);
+  return 100;
+}
+
 int InstanceClassLoaderKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
   InstanceKlass::oop_update_pointers(cm, obj);
   return size_helper();

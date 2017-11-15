@@ -67,33 +67,70 @@ inline bool PSScavenge::should_scavenge(T* p, bool check_to_space) {
 // attempting marking.
 template <class T, bool promote_immediately>
 inline void PSScavenge::copy_and_push_safe_barrier(PSPromotionManager* pm,
-                                                   T*                  p) {
+                                                   T*                  p,
+                                                   ParallelTaskTerminator *terminator) {
   assert(should_scavenge(p, true), "revisiting object?");
 
   oop o = oopDesc::load_decode_heap_oop_not_null(p);
-  oop new_obj = o->is_forwarded()
-        ? o->forwardee()
-        : pm->copy_to_survivor_space<promote_immediately>(o);
+
+  oop new_obj;
+  if (o->is_typeArray() && terminator) {
+//  if (o->num_references() == 0 && terminator) {
+//  if (o->is_typeArray() && (o->num_references() == 0) && terminator) {
+
+    new_obj = o->is_forwarded()
+            ? o->forwardee()
+            : pm->lazyCopy_to_survivor_space<promote_immediately>(o, terminator);
+
+    size_t new_obj_size = o->size();
+    markOop test_mark = o->mark();
+
+    if (o->cas_forward_to(new_obj, test_mark)) {
+      pm->push_objinfo(o, new_obj);
+/*
+      if (!new_obj_is_tenured) {
+        new_obj->incr_age();
+        assert(young_space()->contains(new_obj), "Attempt to push non-promoted obj");
+      }
+      if (new_obj_size > pm->_min_array_size_for_chunking &&
+        o->is_objArray() &&
+        PSChunkLargeArrays) {
+        // we'll chunk it
+        oop* const masked_o = pm->mask_chunked_array_oop(o);
+        pm->push_depth(masked_o);
+        TASKQUEUE_STATS_ONLY(++_arrays_chunked; ++_masked_pushes);
+      }
+*/
+    } else {
+      new_obj = o->forwardee();
+    }
+    oopDesc::encode_store_heap_oop_not_null(p, new_obj);
+  } 
+  else {
+    new_obj = o->is_forwarded()
+            ? o->forwardee()
+            : pm->copy_to_survivor_space<promote_immediately>(o);
 
 #ifndef PRODUCT
-  // This code must come after the CAS test, or it will print incorrect
-  // information.
-  if (TraceScavenge &&  o->is_forwarded()) {
-    gclog_or_tty->print_cr("{%s %s " PTR_FORMAT " -> " PTR_FORMAT " (%d)}",
-       "forwarding",
-       new_obj->klass()->internal_name(), p2i((void *)o), p2i((void *)new_obj), new_obj->size());
-  }
+    // This code must come after the CAS test, or it will print incorrect
+    // information.
+    if (TraceScavenge &&  o->is_forwarded()) {
+      gclog_or_tty->print_cr("{%s %s " PTR_FORMAT " -> " PTR_FORMAT " (%d)}",
+        "forwarding",
+        new_obj->klass()->internal_name(), p2i((void *)o), p2i((void *)new_obj), new_obj->size());
+    }
 #endif
 
-  oopDesc::encode_store_heap_oop_not_null(p, new_obj);
+    oopDesc::encode_store_heap_oop_not_null(p, new_obj);
 
-  // We cannot mark without test, as some code passes us pointers
-  // that are outside the heap. These pointers are either from roots
-  // or from metadata.
-  if ((!PSScavenge::is_obj_in_young((HeapWord*)p)) &&
+    // We cannot mark without test, as some code passes us pointers
+    // that are outside the heap. These pointers are either from roots
+    // or from metadata.
+    if ((!PSScavenge::is_obj_in_young((HeapWord*)p)) &&
       Universe::heap()->is_in_reserved(p)) {
-    if (PSScavenge::is_obj_in_young(new_obj)) {
-      card_table()->inline_write_ref_field_gc(p, new_obj);
+      if (PSScavenge::is_obj_in_young(new_obj)) {
+        card_table()->inline_write_ref_field_gc(p, new_obj);
+      }
     }
   }
 }
@@ -200,4 +237,4 @@ class PSScavengeKlassClosure: public KlassClosure {
   }
 };
 
-#endif // SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSSCAVENGE_INLINE_HPP
+#endif // SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSSCAVENGE_INLINE_HP

@@ -33,11 +33,14 @@
 
 // Simple TaskQueue stats that are collected by default in debug builds.
 
+/*
 #if !defined(TASKQUEUE_STATS) && defined(ASSERT)
 #define TASKQUEUE_STATS 1
 #elif !defined(TASKQUEUE_STATS)
 #define TASKQUEUE_STATS 0
 #endif
+*/
+#define TASKQUEUE_STATS 1
 
 #if TASKQUEUE_STATS
 #define TASKQUEUE_STATS_ONLY(code) code
@@ -630,14 +633,14 @@ public:
   // else is.  If returns "true", all threads are terminated.  If returns
   // "false", available work has been observed in one of the task queues,
   // so the global task is not complete.
-  bool offer_termination() {
-    return offer_termination(NULL);
+  bool offer_termination(PSPromotionManager *pm = NULL) {
+    return offer_termination(NULL, pm);
   }
 
   // As above, but it also terminates if the should_exit_termination()
   // method of the terminator parameter returns true. If terminator is
   // NULL, then it is ignored.
-  bool offer_termination(TerminatorTerminator* terminator);
+  bool offer_termination(TerminatorTerminator* terminator, PSPromotionManager *pm = NULL);
 
   // Reset the terminator, so that it may be reused again.
   // The caller is responsible for ensuring that this is done
@@ -801,6 +804,5 @@ typedef GenericTaskQueueSet<OopStarTaskQueue, mtClass> OopStarTaskQueueSet;
 
 typedef OverflowTaskQueue<size_t, mtInternal>             RegionTaskQueue;
 typedef GenericTaskQueueSet<RegionTaskQueue, mtClass>     RegionTaskQueueSet;
-
 
 #endif // SHARE_VM_UTILITIES_TASKQUEUE_HPP

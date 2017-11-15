@@ -43,4 +43,13 @@ inline void oopDesc::push_contents(PSPromotionManager* pm) {
   // Else skip it.  The TypeArrayKlass in the header never needs scavenging.
 }
 
+inline int oopDesc::num_references() {
+  Klass* k = klass();
+  if (!k->oop_is_typeArray()) {
+    // It might contain oops beyond the header, so take the virtual call.
+    return k->oop_num_references(this);
+  }
+  return 0;
+}
+
 #endif // SHARE_VM_OOPS_OOP_PSGC_INLINE_HPP

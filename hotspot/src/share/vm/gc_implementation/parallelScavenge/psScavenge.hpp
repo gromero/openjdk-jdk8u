@@ -144,7 +144,7 @@ class PSScavenge: AllStatic {
   template <class T> static inline bool should_scavenge(T* p, bool check_to_space);
 
   template <class T, bool promote_immediately>
-    inline static void copy_and_push_safe_barrier(PSPromotionManager* pm, T* p);
+    inline static void copy_and_push_safe_barrier(PSPromotionManager* pm, T* p, ParallelTaskTerminator *terminator = NULL);
 
   static void copy_and_push_safe_barrier_from_klass(PSPromotionManager* pm, oop* p);
 

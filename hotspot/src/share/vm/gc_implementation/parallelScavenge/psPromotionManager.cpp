@@ -156,6 +156,9 @@ PSPromotionManager::PSPromotionManager() {
   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
   assert(heap->kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
 
+  _objinfo_old_set = new Stack<oop, mtInternal>();
+  _objinfo_new_set = new Stack<oop, mtInternal>();
+
   // We set the old lab's start array.
   _old_lab.set_start_array(old_gen()->start_array());
 
@@ -202,7 +205,7 @@ void PSPromotionManager::reset() {
 }
 
 
-void PSPromotionManager::drain_stacks_depth(bool totally_drain) {
+void PSPromotionManager::drain_stacks_depth(bool totally_drain, ParallelTaskTerminator *terminator) {
   totally_drain = totally_drain || _totally_drain;
 
 #ifdef ASSERT
@@ -219,16 +222,16 @@ void PSPromotionManager::drain_stacks_depth(bool totally_drain) {
     // Drain overflow stack first, so other threads can steal from
     // claimed stack while we work.
     while (tq->pop_overflow(p)) {
-      process_popped_location_depth(p);
+      process_popped_location_depth(p, terminator);
     }
 
     if (totally_drain) {
       while (tq->pop_local(p)) {
-        process_popped_location_depth(p);
+        process_popped_location_depth(p, terminator);
       }
     } else {
       while (tq->size() > _target_stack_size && tq->pop_local(p)) {
-        process_popped_location_depth(p);
+        process_popped_location_depth(p, terminator);
       }
     }
   } while (totally_drain && !tq->taskqueue_empty() || !tq->overflow_empty());

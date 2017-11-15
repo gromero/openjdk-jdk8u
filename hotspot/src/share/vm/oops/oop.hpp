@@ -297,6 +297,8 @@ class oopDesc {
   // Parallel Scavenge
   void push_contents(PSPromotionManager* pm);
 
+  int num_references();
+
   // Parallel Old
   void update_contents(ParCompactionManager* cm);
 

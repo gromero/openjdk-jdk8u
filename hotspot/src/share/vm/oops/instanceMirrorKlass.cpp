@@ -339,6 +339,11 @@ void InstanceMirrorKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
     assert_nothing )
 }
 
+int InstanceMirrorKlass::oop_num_references(oop obj) {
+//  return java_lang_Class::static_oop_field_count(obj);
+  return 100;
+}
+
 int InstanceMirrorKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
   int size = oop_size(obj);
   InstanceKlass::oop_update_pointers(cm, obj);
